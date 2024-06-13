@@ -1,0 +1,123 @@
+# Copyright 2023 The Fuchsia Authors
+#
+# Use of this source code is governed by a MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT
+
+import("//build/config/riscv64/riscv64.gni")
+import("//build/toolchain/toolchain_environment.gni")
+
+if (toolchain_base_environment == "kernel") {
+  # These set the ABI contract between C++ and assembly code.
+  # This is kept consistent between the kernel proper and phys
+  # so (pure PIC) assembly code should be callable from either.
+  config("abi") {
+    # This is RV64GC minus F and D.  No FP state should be touched by compiled
+    # code in the kernel.
+    _march = "rv64imac"
+    _features = fuchsia_riscv_profile.u64_mandatory
+
+    # These are implied by G, which we don't use because it implies F and D.
+    _features += [
+      "zicsr",
+      "zifencei",
+    ]
+
+    foreach(feature, _features) {
+      _march += "_$feature"
+    }
+
+    cflags = [
+      "-march=$_march",
+      "-mabi=lp64",  # vs lp64d for userland.
+    ]
+
+    # s11 (x27) is used for percpu pointer, so tell the compiler not to use it.
+    cflags += [ "-ffixed-x27" ]
+
+    if (!is_gcc) {
+      cflags += [
+        # Use shadow-call-stack rather than safe-stack for the kernel,
+        # regardless of the compiler's default.
+        "-fno-sanitize=safe-stack",
+        "-fsanitize=shadow-call-stack",
+
+        # TODO-rvbringup: add support for stack protector logic
+        "-fno-stack-protector",
+      ]
+    }
+
+    # Assembly code needs to use `#if __has_feature(...)` so make sure
+    # it always sees all the same `-fsanitize=...` flags and the like.
+    asmflags = cflags
+    ldflags = cflags
+  }
+
+  # This is used pervasively throughout the kernel on riscv64.
+  config("kernel") {
+    # For #include <arch/foo.h>.
+    include_dirs = [ "include" ]
+  }
+
+  source_set("riscv64") {
+    sources = [
+      "arch.cc",
+      "asid_allocator.cc",
+      "asm.S",
+      "cache.cc",
+      "crashlog.cc",
+      "debugger.cc",
+      "exceptions.S",
+      "exceptions_c.cc",
+      "feature.cc",
+      "fpu.cc",
+      "fpu_asm.S",
+      "mmu.cc",
+      "mp.cc",
+      "restricted.cc",
+      "sbi.cc",
+      "spinlock.cc",
+      "start.S",
+      "thread.cc",
+      "timer.cc",
+      "user_copy_c.cc",
+      "vector.cc",
+      "vector_asm.S",
+    ]
+    deps = [
+      ":boot-mmu",
+      "//sdk/lib/zbi-format",
+      "//zircon/kernel/dev/iommu/dummy",
+      "//zircon/kernel/dev/pdev/power",
+      "//zircon/kernel/dev/pdev/timer",
+      "//zircon/kernel/lib/arch",
+      "//zircon/kernel/lib/boot-options",
+      "//zircon/kernel/lib/code-patching",
+      "//zircon/kernel/lib/console",
+      "//zircon/kernel/lib/counters",
+      "//zircon/kernel/lib/crashlog",
+      "//zircon/kernel/lib/heap",
+      "//zircon/kernel/lib/init",
+      "//zircon/kernel/lib/ktl",
+      "//zircon/kernel/lib/syscalls",
+      "//zircon/kernel/lib/unittest",
+      "//zircon/kernel/object",
+      "//zircon/kernel/phys:handoff",
+      "//zircon/kernel/vm",
+      "//zircon/system/ulib/affine",
+      "//zircon/system/ulib/bitmap",
+      "//zircon/system/ulib/pretty",
+    ]
+  }
+
+  source_set("boot-mmu") {
+    visibility = [ ":*" ]
+
+    sources = [ "boot-mmu.cc" ]
+    deps = [ "//zircon/kernel/vm" ]
+
+    # Everything in this file runs too early to use the full ABI.  Per-function
+    # attribute suppression of sanitizer modes doesn't work for C++ lambda.
+    configs += [ "//build/config/sanitizers:no_sanitizers" ]
+  }
+}

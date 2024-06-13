@@ -1,0 +1,18 @@
+# Copyright 2024 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/cpp/library_headers.gni")
+
+library_headers("headers") {
+  headers = [
+    "lib/fasttime/time.h",
+    "lib/fasttime/internal/abi.h",
+    "lib/fasttime/internal/time.h",
+  ]
+  public_deps = [
+    "//zircon/kernel/lib/arch",
+    "//zircon/system/public",
+    "//zircon/system/ulib/affine",
+  ]
+}

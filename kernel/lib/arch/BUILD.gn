@@ -1,0 +1,105 @@
+# Copyright 2020 The Fuchsia Authors
+#
+# Use of this source code is governed by a MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT
+
+import("//build/cpp/library_headers.gni")
+import("//build/zircon/zircon_cpu.gni")
+import("//zircon/system/ulib/hwreg/hwreg_asm_header.gni")
+
+group("headers") {
+  # The per-CPU subdirectory is a separate library target but it shares
+  # (and overrides) the <lib/arch/...> header name space and users of this
+  # library need never realize it's distinct.
+
+  if (is_host) {
+    public_deps = [ "host" ]
+  } else {
+    public_deps = [
+      "$zircon_cpu:headers",
+
+      # These would be circular dependencies on the host, since that's where
+      # the generator programs are built and they need the library's headers.
+      # Since these headers are meant to be used by assembly code, they should
+      # not be needed by any host-compatible code.
+      ":gen-arm64-sysreg-asm",
+      ":gen-riscv64-system-asm",
+      ":gen-x86-msr-asm",
+    ]
+  }
+
+  # This comes after the arch-specific one so arch-specific headers
+  # take precedence (and can use `#include_next`).
+  public_deps += [ ":common-headers" ]
+}
+
+library_headers("common-headers") {
+  visibility = [ ":*" ]
+
+  headers = []
+  public_deps = [
+    "//sdk/lib/stdcompat",
+
+    # <lib/arch/zbi.h> has #include <lib/zbi-format/kernel.h>
+    # <lib/arch/zbi.h> has #include <lib/zbi-format/zbi.h>
+    "//sdk/lib/zbi-format",
+
+    # <lib/arch/zbi.h> has #include <fidl/zbi/data/asm/zbi.h>
+    "//sdk/fidl/zbi:zbi_zither.asm",
+
+    # <lib/arch/x86/cpuid.h> has #include <hwreg/bitfields.h>.
+    "//zircon/system/ulib/hwreg:headers",
+  ]
+
+  if (is_kernel) {
+    # <lib/arch/arm64/page-table.h> has #include <fbl/bits.h>
+    # <lib/arch/riscv64/page-table.h> has #include <fbl/bits.h>
+    # <lib/arch/x86/page-table.h> has #include <fbl/bits.h>
+    public_deps += [ "//zircon/system/ulib/fbl:headers" ]
+  } else {
+    public_deps += [ "//zircon/system/ulib/fbl" ]
+  }
+}
+
+static_library("arch") {
+  public_deps = [ ":headers" ]
+
+  sources = [
+    "cpuid.cc",
+    "riscv64-features.cc",
+  ]
+
+  if (is_fuchsia || is_kernel) {
+    deps = [ zircon_cpu ]
+  }
+}
+
+group("tests") {
+  testonly = true
+  deps = [ "test:tests" ]
+}
+
+hwreg_asm_header("gen-x86-msr-asm") {
+  visibility = [ ":*" ]
+  output_name = "lib/arch/x86/msr-asm.h"
+  defines = [ "LIB_ARCH_PRINTERS" ]
+  sources = [ "gen-x86-msr-asm.cc" ]
+  deps = [ ":arch" ]
+}
+
+hwreg_asm_header("gen-arm64-sysreg-asm") {
+  visibility = [ ":*" ]
+  output_name = "lib/arch/arm64/sysreg-asm.h"
+  defines = [ "LIB_ARCH_PRINTERS" ]
+  sources = [ "gen-arm64-sysreg-asm.cc" ]
+  deps = [ ":arch" ]
+}
+
+hwreg_asm_header("gen-riscv64-system-asm") {
+  visibility = [ ":*" ]
+  output_name = "lib/arch/riscv64/system-asm.h"
+  defines = [ "LIB_ARCH_PRINTERS" ]
+  sources = [ "gen-riscv64-system-asm.cc" ]
+  deps = [ ":arch" ]
+}

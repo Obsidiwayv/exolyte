@@ -1,0 +1,575 @@
+// Copyright 2019 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+library zx;
+
+// TODO(cja): This makes some assumptions that anything in an arch's PIO region
+// is going to be defined as a base address and size. This will need to be
+// updated to a per-platform structure in the event that doesn't pan out
+// in the future.
+type PciBar = struct {
+    id uint32;
+    type uint32;
+    size usize64;
+    // TODO(scottmg): Unnamed union.
+    //union {
+    //    uintptr_t addr;
+    //    zx_handle_t Handle;
+    //};
+};
+
+// Defines and structures related to zx_pci_*()
+// Info returned to dev manager for PCIe devices when probing.
+type PcieDeviceInfo = struct {
+    vendor_id uint16;
+    device_id uint16;
+
+    base_class uint8;
+    sub_class uint8;
+    program_interface uint8;
+    revision_id uint8;
+
+    bus_id uint8;
+    dev_id uint8;
+    func_id uint8;
+};
+
+// TODO(scottmg): Lots of constants here.
+
+// TODO(scottmg): This one is hard.
+type PciInitArg = struct {
+    // TODO(scottmg): [][][] array.
+    // zx_pci_irq_swizzle_lut_t dev_pin_to_global_irq;
+
+    num_irqs uint32;
+    //struct {
+    //  uint32_t global_irq;
+    //  bool level_triggered;
+    //  bool active_high;
+    //} irqs[ZX_PCI_MAX_IRQS];
+
+    addr_window_count uint32;
+    // TODO(scottmg): struct-hack sized.
+    //struct {
+    //  uint64_t base;
+    //  size_t size;
+    //  uint8_t bus_start;
+    //  uint8_t bus_end;
+    //  uint8_t cfg_space_type;
+    //  bool has_ecam;
+    //} addr_windows[];
+};
+
+@transport("Syscall")
+closed protocol Pci {
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_get_nth_device(zx_handle_t handle,
+    ///                                   uint32_t index,
+    ///                                   zx_pcie_device_info_t* out_info,
+    ///                                   zx_handle_t* out_handle);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must have resource kind `ZX_RSRC_KIND_IRQ`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict GetNthDevice(resource struct {
+        handle Handle:RESOURCE;
+        index uint32;
+    }) -> (resource struct {
+        out_info PcieDeviceInfo;
+        out_handle Handle;
+    }) error Status;
+
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_enable_bus_master(zx_handle_t handle, uint32_t enable);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must be of type `ZX_OBJ_TYPE_PCI_DEVICE` and have `ZX_RIGHT_WRITE`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict EnableBusMaster(resource struct {
+        handle Handle:PCI_DEVICE;
+        enable uint32;
+    }) -> () error Status;
+
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_reset_device(zx_handle_t handle);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must be of type `ZX_OBJ_TYPE_PCI_DEVICE` and have `ZX_RIGHT_WRITE`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict ResetDevice(resource struct {
+        handle Handle:PCI_DEVICE;
+    }) -> () error Status;
+
+    // TODO(scottmg): In banjo/abigen out_val wasn't optional, but was an input
+    // OUT, so didn't get the __NONNULL() tag, so we match by making it optional
+    // here. I think this is probably not the intention, and it should be
+    // non-optional.
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_config_read(zx_handle_t handle,
+    ///                                uint16_t offset,
+    ///                                size_t width,
+    ///                                uint32_t* out_val);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must be of type `ZX_OBJ_TYPE_PCI_DEVICE` and have `ZX_RIGHT_READ` and have `ZX_RIGHT_WRITE`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict ConfigRead(resource struct {
+        handle Handle:PCI_DEVICE;
+        offset uint16;
+        width usize64;
+    }) -> (struct {
+        out_val uint32;
+    }) error Status;
+
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_config_write(zx_handle_t handle,
+    ///                                 uint16_t offset,
+    ///                                 size_t width,
+    ///                                 uint32_t val);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must be of type `ZX_OBJ_TYPE_PCI_DEVICE` and have `ZX_RIGHT_READ` and have `ZX_RIGHT_WRITE`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict ConfigWrite(resource struct {
+        handle Handle:PCI_DEVICE;
+        offset uint16;
+        width usize64;
+        val uint32;
+    }) -> () error Status;
+
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_cfg_pio_rw(zx_handle_t handle,
+    ///                               uint8_t bus,
+    ///                               uint8_t dev,
+    ///                               uint8_t func,
+    ///                               uint8_t offset,
+    ///                               uint32_t* val,
+    ///                               size_t width,
+    ///                               uint32_t write);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must have resource kind `ZX_RSRC_KIND_IOPORT`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict CfgPioRw(resource struct {
+        handle Handle:RESOURCE;
+        bus uint8;
+        dev uint8;
+        func uint8;
+        offset uint8;
+        @inout
+        val uint32;
+        width usize64;
+        write uint32;
+    }) -> () error Status;
+
+    // TODO(scottmg): type of out_handle?
+    // TODO(scottmg): In banjo/abigen out_bar wasn't optional, but was an input
+    // OUT, so has no __NONNULL(). I think this is probably not the intention.
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_get_bar(zx_handle_t handle,
+    ///                            uint32_t bar_num,
+    ///                            zx_pci_bar_t* out_bar,
+    ///                            zx_handle_t* out_handle);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead get the PCI Base Address
+    /// Register information from the [PCI driver
+    /// interface](/docs/development/drivers/concepts/driver_development/bar.md);
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must be of type `ZX_OBJ_TYPE_PCI_DEVICE` and have `ZX_RIGHT_READ` and have `ZX_RIGHT_WRITE`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict GetBar(resource struct {
+        handle Handle:PCI_DEVICE;
+        bar_num uint32;
+    }) -> (resource struct {
+        out_bar PciBar;
+        out_handle Handle;
+    }) error Status;
+
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_map_interrupt(zx_handle_t handle,
+    ///                                  int32_t which_irq,
+    ///                                  zx_handle_t* out_handle);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must be of type `ZX_OBJ_TYPE_PCI_DEVICE` and have `ZX_RIGHT_READ`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict MapInterrupt(resource struct {
+        handle Handle:PCI_DEVICE;
+        which_irq int32;
+    }) -> (resource struct {
+        out_handle Handle;
+    }) error Status;
+
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_query_irq_mode(zx_handle_t handle,
+    ///                                   uint32_t mode,
+    ///                                   uint32_t* out_max_irqs);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must be of type `ZX_OBJ_TYPE_PCI_DEVICE` and have `ZX_RIGHT_READ`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict QueryIrqMode(resource struct {
+        handle Handle:PCI_DEVICE;
+        mode uint32;
+    }) -> (struct {
+        out_max_irqs uint32;
+    }) error Status;
+
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_set_irq_mode(zx_handle_t handle,
+    ///                                 uint32_t mode,
+    ///                                 uint32_t requested_irq_count);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must be of type `ZX_OBJ_TYPE_PCI_DEVICE` and have `ZX_RIGHT_WRITE`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict SetIrqMode(resource struct {
+        handle Handle:PCI_DEVICE;
+        mode uint32;
+        requested_irq_count uint32;
+    }) -> () error Status;
+
+    // Note that init_buf isn't a vector of PciInitArg, it's a variable sized
+    // structure starting with a zx_pci_init_arg_t.
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_init(zx_handle_t handle,
+    ///                         const zx_pci_init_arg_t* init_buf,
+    ///                         uint32_t len);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must have resource kind `ZX_RSRC_KIND_MMIO`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict Init(resource struct {
+        handle Handle:RESOURCE;
+        init_buf PciInitArg;
+        len uint32;
+    }) -> () error Status;
+
+    /// ## Summary
+    ///
+    /// This function is obsolete and should not be used.
+    ///
+    /// ## Declaration
+    ///
+    /// ```c
+    /// #include <zircon/syscalls.h>
+    ///
+    /// zx_status_t zx_pci_add_subtract_io_range(zx_handle_t handle,
+    ///                                          uint32_t mmio,
+    ///                                          uint64_t base,
+    ///                                          uint64_t len,
+    ///                                          uint32_t add);
+    /// ```
+    ///
+    /// ## Description
+    ///
+    /// This function is obsolete and should not be used. Drivers should instead use the PCI protocol
+    /// Typically, you obtain this in your `bind()` function through `device_get_protocol()`.
+    ///
+    /// ## Rights
+    ///
+    /// *handle* must have resource kind `ZX_RSRC_KIND_MMIO`.
+    ///
+    /// ## Return value
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## Errors
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    ///
+    /// ## See also
+    ///
+    /// TODO(https://fxbug.dev/42108078)
+    strict AddSubtractIoRange(resource struct {
+        handle Handle:RESOURCE;
+        mmio uint32;
+        base uint64;
+        len uint64;
+        add uint32;
+    }) -> () error Status;
+};

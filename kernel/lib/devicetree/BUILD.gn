@@ -1,0 +1,42 @@
+# Copyright 2020 The Fuchsia Authors
+#
+# Use of this source code is governed by a MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT
+
+import("//build/zircon/migrated_targets.gni")
+
+zx_library("devicetree") {
+  sources = [
+    "alias-matcher.cc",
+    "devicetree-node-path.cc",
+    "devicetree.cc",
+  ]
+  deps = [ "//zircon/system/ulib/fbl" ]
+
+  public_deps = [
+    "//sdk/lib/stdcompat",
+    "//zircon/system/ulib/fbl:headers",
+    "//zircon/system/ulib/zircon-internal:headers",
+    "//zircon/system/ulib/zx:headers",
+  ]
+  if (is_kernel) {
+    public_deps += [
+      "//zircon/kernel/lib/ktl",
+      "//zircon/kernel/lib/libc:headers",
+    ]
+  }
+
+  # TODO: revisit the following three specifications after the zircon-to-fuchsia
+  # build migration. They seem currently required in order to export the host
+  # compilation of this library to the fuchsia build.
+
+  sdk = "static"
+  sdk_headers = [
+    "lib/devicetree/devicetree.h",
+    "lib/devicetree/matcher.h",
+    "lib/devicetree/internal/devicetree.h",
+    "lib/devicetree/internal/matcher.h",
+  ]
+  sdk_publishable = "internal"
+}

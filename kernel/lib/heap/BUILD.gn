@@ -1,0 +1,35 @@
+# Copyright 2019 The Fuchsia Authors
+#
+# Use of this source code is governed by a MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT
+
+import("//build/cpp/library_headers.gni")
+
+library_headers("headers") {
+  headers = [ "lib/heap.h" ]
+}
+
+library_headers("headers.internal") {
+  visibility = [ "./*" ]
+
+  headers = [ "lib/heap_internal.h" ]
+}
+
+source_set("heap") {
+  public_deps = [ ":headers" ]
+
+  sources = [
+    "cxx_allocator.cc",
+    "heap_wrapper.cc",
+  ]
+  deps = [
+    ":headers.internal",
+    "cmpctmalloc",
+    "//zircon/kernel/lib/console",
+    "//zircon/kernel/lib/virtual_alloc",
+
+    # TODO(https://fxbug.dev/42128324): Remove headers when possible.
+    "//zircon/kernel/lib/instrumentation:headers",
+  ]
+}

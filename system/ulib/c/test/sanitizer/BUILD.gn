@@ -1,0 +1,269 @@
+# Copyright 2019 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/test.gni")
+import("//build/testing/bootfs_test.gni")
+
+# Define a target that expects the lsan runtime to be provided. If the lsan
+# runtime is provided, this will create the target type normally and append
+# various deps to the targets current deps. See below for what extra deps
+# can be defined. The lsan runtime is provided if either the target is built
+# using a toolchain with the "lsan" variant tag (meaning the lsan runtime is
+# already provided), or both the "lsan" and "replaces-allocator" tags are not
+# in the toolchain variant tags (meaning the lsan isn't present, but this lsan
+# can be explicitly added as a config).
+#
+# Parameters:
+#
+#   target_type:
+#     Required: Name of the GN template that will be invoked to instantiate
+#     this target ("test", "executable", etc.).
+#
+template("lsan_target") {
+  # These are the deps that will be forwarded if lsan can be used.
+  _extra_deps = [
+    "data_deps",
+    "sources",
+  ]
+  _configs = []
+
+  if (toolchain_variant.tags + [ "lsan" ] - [ "lsan" ] !=
+      toolchain_variant.tags) {
+    # The variant has lsan.
+    using_lsan = true
+  } else if (toolchain_variant.tags + [ "replaces-allocator" ] -
+             [ "replaces-allocator" ] != toolchain_variant.tags) {
+    # The variant does not have lsan but replaces C/C++ memory allocation APIs.
+    # HWASan falls under this case.
+    using_lsan = false
+  } else {
+    # Neither replaces-allocator not lsan is defined. We can just add the lsan
+    # config and build the test normally.
+    _configs += [ "//build/config/sanitizers:lsan" ]
+    using_lsan = true
+  }
+
+  # LSan requires frame pointers.  First make sure that none of the related
+  # configs is in the list, then add the one enabling frame pointers.
+  if (using_lsan) {
+    fp_configs = [
+      "//build/config:default_frame_pointers",
+      "//build/config:frame_pointers",
+      "//build/config:no_frame_pointers",
+    ]
+    _configs += fp_configs
+    _configs -= fp_configs
+    _configs += [ "//build/config:frame_pointers" ]
+  }
+
+  target(invoker.target_type, target_name) {
+    forward_variables_from(invoker, "*", [ "target_type" ] + _extra_deps)
+    if (using_lsan) {
+      forward_variables_from(invoker, _extra_deps)
+    }
+
+    if (defined(configs)) {
+      configs += _configs
+    } else {
+      configs = _configs
+    }
+  }
+}
+
+group("sanitizer") {
+  testonly = true
+  deps = [
+    ":hwasan-ctor-order-bootfs-test",
+    ":lsan-bootfs-test",
+    ":sanitizer-utils-bootfs-test",
+  ]
+}
+
+test("sanitizer-utils-test") {
+  if (is_fuchsia) {
+    fdio_config = [ "//build/config/fuchsia:fdio_config" ]
+    if (configs + fdio_config - fdio_config != configs) {
+      configs -= fdio_config
+    }
+  }
+  sources = [ "sanitizer-utils.cc" ]
+  deps = [
+    ":memory-snapshot-test",
+    "//sdk/lib/fdio",
+    "//zircon/system/ulib/async",
+    "//zircon/system/ulib/async-default",
+    "//zircon/system/ulib/async-loop",
+    "//zircon/system/ulib/async-loop:async-loop-default",
+    "//zircon/system/ulib/ldmsg",
+    "//zircon/system/ulib/zxtest",
+  ]
+  data_deps = [
+    ":sanitizer-exit-hook-test-helper",
+    ":sanitizer-module-loaded-test-helper",
+  ]
+}
+
+executable("sanitizer-exit-hook-test-helper") {
+  visibility = [ ":*" ]
+  sources = [ "exit-hook-test-helper.cc" ]
+  configs -= [ "//build/config/fuchsia:fdio_config" ]
+  exclude_toolchain_tags = [ "instrumentation-runtime" ]
+}
+
+executable("sanitizer-module-loaded-test-helper") {
+  visibility = [ ":*" ]
+  testonly = true
+
+  sources = [ "module-loaded-test-helper.cc" ]
+  configs -= [ "//build/config/fuchsia:fdio_config" ]
+  exclude_toolchain_tags = [ "instrumentation-runtime" ]
+  deps = [ ":sanitizer-module-loaded-test-needed-dso" ]
+  data_deps = [ ":sanitizer-module-loaded-test-dlopen-dso" ]
+
+  # The linker can omit some symbols from the .dynsym since it's an executable and
+  # might not be able to find instances it links against at build time where this
+  # symbol can be externally referenced. This forces it to be manifested so weakrefs
+  # in sanitizer-module-loaded-test-dlopen-dso can use the strong definition
+  # provided in this executable.
+  ldflags = [ "-rdynamic" ]
+}
+
+shared_library("sanitizer-module-loaded-test-dlopen-dso") {
+  visibility = [ ":*" ]
+  testonly = true
+
+  sources = [ "sanitizer-module-loaded-test-dlopen-dso.cc" ]
+  deps = [ ":sanitizer-module-loaded-test-dlopen-needed-dso" ]
+}
+
+shared_library("sanitizer-module-loaded-test-needed-dso") {
+  visibility = [ ":*" ]
+  testonly = true
+
+  sources = [ "sanitizer-module-loaded-test-needed-dso.cc" ]
+}
+
+shared_library("sanitizer-module-loaded-test-dlopen-needed-dso") {
+  visibility = [ ":*" ]
+  testonly = true
+
+  # This can just reuse the same source file as sanitizer-module-loaded-test-dlopen-dso since they check the same thing.
+  sources = [ "sanitizer-module-loaded-test-dlopen-dso.cc" ]
+}
+
+source_set("memory-snapshot-test") {
+  visibility = [ ":*" ]
+  sources = [ "memory-snapshot-test.cc" ]
+  deps = [
+    ":sanitizer-memory-snapshot-test-needed-dso",
+    "//zircon/system/ulib/zx",
+    "//zircon/system/ulib/zxtest",
+    "//zircon/third_party/ulib/musl:musl_internal",
+  ]
+  data_deps = [ ":sanitizer-memory-snapshot-test-dlopen-dso" ]
+
+  if (current_cpu == "arm64") {
+    cflags = [ "-ffixed-x28" ]
+  }
+
+  # This test needs to verify how stack allocations come out, which is
+  # incompatible with ASan fake-stack allocations.
+  deps += [ "//build/config/sanitizers:suppress-asan-stack-use-after-return" ]
+}
+
+shared_library("ctor-order-test-no-deps-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "no-deps.cc" ]
+  testonly = true
+}
+
+shared_library("ctor-order-test-interposable-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "interposable.cc" ]
+  testonly = true
+}
+
+shared_library("ctor-order-test-interposable-weak-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "interposable-weak.cc" ]
+  testonly = true
+}
+
+shared_library("ctor-order-test-no-interposing-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "no-interposing.cc" ]
+  deps = [ ":ctor-order-test-interposable-dso" ]
+  testonly = true
+}
+
+shared_library("ctor-order-test-interposing-dso") {
+  visibility = [ ":*" ]
+
+  sources = [ "interposing.cc" ]
+  deps = [ ":ctor-order-test-interposable-dso" ]
+  testonly = true
+}
+
+test("hwasan-ctor-order-test") {
+  visibility = [ ":*" ]
+
+  sources = [ "hwasan-ctor-order.cc" ]
+  data_deps = [
+    ":ctor-order-test-interposable-dso",
+    ":ctor-order-test-interposable-weak-dso",
+    ":ctor-order-test-interposing-dso",
+    ":ctor-order-test-no-deps-dso",
+    ":ctor-order-test-no-interposing-dso",
+  ]
+  deps = [ "//zircon/system/ulib/zxtest" ]
+  testonly = true
+}
+
+bootfs_test("hwasan-ctor-order-bootfs-test") {
+  name = "hwasan-ctor-order-test"
+  deps = [ ":hwasan-ctor-order-test" ]
+}
+
+shared_library("sanitizer-memory-snapshot-test-needed-dso") {
+  visibility = [ ":*" ]
+  sources = [ "sanitizer-memory-snapshot-test-needed-dso.cc" ]
+}
+
+shared_library("sanitizer-memory-snapshot-test-dlopen-dso") {
+  visibility = [ ":*" ]
+  sources = [ "sanitizer-memory-snapshot-test-dlopen-dso.cc" ]
+}
+
+lsan_target("lsan-test") {
+  target_type = "test"
+  deps = [
+    "//zircon/system/ulib/explicit-memory",
+    "//zircon/system/ulib/zxtest",
+  ]
+
+  # Note that if lsan is not available, this will result in an empty test where
+  # main is provided by zxtest.
+  sources = [ "lsan-test.cc" ]
+  data_deps = [ ":lsan-thread-race-test" ]
+}
+
+lsan_target("lsan-thread-race-test") {
+  target_type = "executable"
+  testonly = true
+  sources = [ "lsan-thread-race-test.cc" ]
+}
+
+bootfs_test("sanitizer-utils-bootfs-test") {
+  name = "sanitizer-utils-test"
+  deps = [ ":sanitizer-utils-test" ]
+}
+
+bootfs_test("lsan-bootfs-test") {
+  name = "lsan-test"
+  deps = [ ":lsan-test" ]
+}

@@ -1,0 +1,43 @@
+# Copyright 2019 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/cpp/sdk_source_set.gni")
+import("//build/zircon/zx_library.gni")
+
+zx_library("sync") {
+  sdk = "static"
+  sdk_publishable = "partner"
+  sdk_headers = [
+    "lib/sync/internal/condition-template.h",
+    "lib/sync/internal/mutex-internal.h",
+    "lib/sync/completion.h",
+    "lib/sync/condition.h",
+    "lib/sync/mutex.h",
+  ]
+  sources = [
+    "completion.c",
+    "condition.cc",
+    "mutex.c",
+  ]
+  deps = [
+    "//src/zircon/lib/zircon",
+    "//zircon/system/ulib/zircon-internal",
+  ]
+}
+
+sdk_source_set("sync-cpp") {
+  category = "partner"
+  sdk_name = "sync_cpp"
+  stable = true
+  public = [
+    "include/lib/sync/cpp/completion.h",
+    "include/lib/sync/cpp/mutex.h",
+  ]
+  include_dirs = [ "include" ]
+  sources = []
+  public_deps = [
+    "//zircon/system/ulib/sync",
+    "//zircon/system/ulib/zx",
+  ]
+}

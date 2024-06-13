@@ -1,0 +1,18 @@
+# Copyright 2019 The Fuchsia Authors
+#
+# Use of this source code is governed by a MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT
+
+source_set("debugcommands") {
+  sources = [
+    "debugcommands.cc",
+    "undefined-behavior.cc",
+  ]
+  deps = [
+    "//zircon/kernel/lib/boot-options",
+    "//zircon/kernel/lib/console",
+    "//zircon/kernel/lib/unittest",
+    "//zircon/system/ulib/zircon-internal",
+  ]
+}

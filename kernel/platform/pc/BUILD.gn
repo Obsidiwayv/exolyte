@@ -1,0 +1,92 @@
+# Copyright 2019 The Fuchsia Authors
+#
+# Use of this source code is governed by a MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT
+
+import("//build/toolchain/toolchain_environment.gni")
+import("//build/zircon/zx_library.gni")
+
+zx_library("pc") {
+  sources = [
+    "acpi.cc",
+    "cmos_bootbyte.cc",
+    "console.cc",
+    "debug.cc",
+    "dev-init.cc",
+    "efi_expected.cc",
+    "hpet.cc",
+    "interrupts.cc",
+    "keyboard.cc",
+    "memory.cc",
+    "pcie_quirks.cc",
+    "pic.cc",
+    "platform.cc",
+    "platform_pcie.cc",
+    "power.cc",
+    "smbios.cc",
+    "timer.cc",
+    "uart.cc",
+  ]
+
+  deps = [
+    ":tests",
+    "//sdk/lib/zbi-format",
+    "//src/lib/zbitl",
+    "//zircon/kernel/arch/x86:headers",
+    "//zircon/kernel/dev/interrupt",
+    "//zircon/kernel/dev/pcie",
+    "//zircon/kernel/lib/acpi_lite",
+    "//zircon/kernel/lib/arch",
+    "//zircon/kernel/lib/boot-options",
+    "//zircon/kernel/lib/cbuf",
+    "//zircon/kernel/lib/console",
+    "//zircon/kernel/lib/counters",
+    "//zircon/kernel/lib/debuglog",
+    "//zircon/kernel/lib/efi",
+    "//zircon/kernel/lib/fbl",
+    "//zircon/kernel/lib/fixed_point",
+    "//zircon/kernel/lib/init",
+    "//zircon/kernel/lib/jtrace:headers",
+    "//zircon/kernel/lib/ktl",
+    "//zircon/kernel/lib/lockdep",
+    "//zircon/kernel/lib/memory_limit",
+    "//zircon/kernel/lib/pow2_range_allocator",
+    "//zircon/kernel/lib/topology",
+    "//zircon/kernel/lib/unittest",
+    "//zircon/kernel/phys:handoff",
+    "//zircon/kernel/phys:handoff",
+    "//zircon/kernel/platform:headers",
+    "//zircon/system/ulib/explicit-memory",
+    "//zircon/system/ulib/ram-crashlog",
+    "//zircon/system/ulib/smbios",
+    "//zircon/system/ulib/uart",
+    "//zircon/third_party/ulib/cksum",
+  ]
+  public_deps = [
+    # <platform/pc/smbios.h> has #include <lib/smbios/smbios.h>.
+    "//zircon/system/ulib/smbios:headers",
+
+    # <ktl/optional.h> in uart.h.
+    "//zircon/kernel/lib/ktl:headers",
+  ]
+
+  if (toolchain_environment == "kernel") {
+    public_deps += [
+      # <platform/pc/timer.h> has #include <lib/affine/ratio.h>.
+      "//zircon/system/ulib/affine",
+    ]
+  }
+}
+
+source_set("tests") {
+  # TODO: testonly = true
+  sources = [ "interrupts_test.cc" ]
+  deps = [
+    ":headers",
+    "//zircon/kernel/dev/interrupt",
+    "//zircon/kernel/lib/console",
+    "//zircon/kernel/lib/pow2_range_allocator",
+    "//zircon/kernel/lib/unittest",
+  ]
+}
